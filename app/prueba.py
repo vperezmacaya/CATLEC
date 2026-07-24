@@ -271,7 +271,7 @@ def get_data():
     status_stats = filtered_df['ESTADO'].value_counts().to_dict()
 
     # 5. Apply Sorter Order
-    sort_by = request.args.get('sort_by', 'Código proyecto')
+    sort_by = request.args.get('sort_by', 'Fecha inicio del contrato de concesión')
     sort_order = request.args.get('sort_order', 'asc')
     
     if sort_by in filtered_df.columns:
@@ -322,6 +322,14 @@ def get_data():
         row_dict = row.to_dict()
         sanitized = {k: sanitize_value(v) for k, v in row_dict.items()}
         p_code = sanitized['Código proyecto']
+
+        m = re.search(r'^\d+_(.+)(\d)$', p_code)
+        if m:
+            base_code = m.group(1)
+        else:
+            m_simple = re.search(r'^(.+)(\d)$', p_code)
+            base_code = m_simple.group(1) if m_simple else p_code
+
         map_projects.append({
             'code': p_code,
             'name': sanitized.get('Nombre de uso común') or sanitized.get('Nombre de la Concesión '),
@@ -332,7 +340,8 @@ def get_data():
             'sector': sanitized['Sector del proyecto'],
             'shapes': parse_shapes_list(get_row_shapes_val(row_dict)),
             'tender_date': get_row_tender_date(row_dict),
-            'bidders': BIDDERS_BY_PROJECT.get(p_code, [])
+            'bidders': BIDDERS_BY_PROJECT.get(p_code, []),
+            'group_timeline': BASE_GROUPS.get(base_code, [])
         })
 
     # 8. Shape final JSON structure response

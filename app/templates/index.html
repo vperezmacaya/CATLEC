@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -59,8 +59,7 @@
 
                         <!-- Region Geographic Multi-Select Filter -->
                         <div class="form-group" style="gap: 0.25rem; position: relative; z-index: 50;">
-                            <label class="form-label" style="font-size: 0.72rem;">Región Geográfica (Norte a
-                                Sur)</label>
+                            <label class="form-label" style="font-size: 0.72rem;">Región Geográfica</label>
                             <div class="custom-multiselect" id="region-multiselect-container">
                                 <button type="button" class="form-input multiselect-trigger" id="region-multiselect-btn"
                                     style="padding: 0.4rem 0.6rem; font-size: 0.8rem;">
@@ -262,12 +261,14 @@
                 <section class="right-panel results-panel">
                     <!-- KPI Counters Grid (Compact 2x2) -->
                     <section class="kpi-grid" aria-label="Indicadores Clave">
-                        <div class="card-kpi">
+                        <div class="card-kpi card-kpi--interactive" id="kpi-total-card"
+                            title="Ver línea de tiempo de proyectos">
                             <div class="kpi-icon"><i data-lucide="file-text"></i></div>
                             <div class="kpi-val-container">
                                 <span class="kpi-label">Proyectos totales</span>
                                 <span class="kpi-value" id="kpi-total">-</span>
                             </div>
+                            <i data-lucide="gantt-chart" class="kpi-timeline-hint"></i>
                         </div>
 
                         <div class="card-kpi">
@@ -312,7 +313,8 @@
                                     <tr>
                                         <th class="sortable" data-sort="Nombre de uso común">Nombre Concesión</th>
                                         <th class="sortable" data-sort="Región geográfica">Región</th>
-                                        <th class="sortable" data-sort="Sector del proyecto">Sector</th>
+                                        <th class="sortable asc" data-sort="Fecha inicio del contrato de concesión">
+                                            Inicio Contrato</th>
                                         <th class="sortable" data-sort="ESTADO">Estado</th>
                                     </tr>
                                 </thead>
@@ -371,6 +373,60 @@
                         </div>
                     </div>
                 </section>
+
+                <!-- Full-Width Timeline Panel (replaces center + right panels) -->
+                <div id="timeline-full-panel" class="timeline-full-panel" style="display:none; grid-column: 2 / -1;">
+                    <!-- Timeline Header -->
+                    <div class="timeline-header">
+                        <div class="timeline-header-left">
+                            <button id="btn-close-timeline" class="btn-reset timeline-back-btn">
+                                <i data-lucide="arrow-left" style="width:13px;height:13px;"></i>
+                                Volver al Mapa
+                            </button>
+                            <span class="timeline-header-divider"></span>
+                            <i data-lucide="gantt-chart" style="width:14px;height:14px;color:var(--primary);"></i>
+                            <h2 class="timeline-header-title">Línea de Tiempo de Concesiones</h2>
+                            <span id="timeline-count-badge" class="timeline-count-badge">0 proyectos</span>
+                        </div>
+                        <div class="timeline-header-right">
+                            <span class="timeline-legend-item">
+                                <span class="tl-legend-dot" style="background:#2563eb;"></span>1ª Licitación
+                            </span>
+                            <span class="timeline-legend-item">
+                                <span class="tl-legend-dot" style="background:#059669;"></span>2ª Relicitación
+                            </span>
+                            <span class="timeline-legend-item">
+                                <span class="tl-legend-dot" style="background:#d97706;"></span>3ª+
+                            </span>
+                            <span class="timeline-legend-item">
+                                <span
+                                    style="display:inline-block;width:2px;height:12px;background:#ef4444;border-radius:1px;"></span>
+                                Hoy
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Year Axis (sticky) -->
+                    <div class="timeline-axis-wrapper">
+                        <div class="timeline-label-col"></div>
+                        <div class="timeline-axis-scroll" id="timeline-axis-scroll">
+                            <svg id="timeline-axis-svg" style="display:block;"></svg>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Rows (scrollable) -->
+                    <div class="timeline-body" id="timeline-body">
+                        <div class="timeline-rows-wrapper">
+                            <div class="timeline-label-col" id="timeline-label-col"></div>
+                            <div class="timeline-bars-scroll" id="timeline-bars-scroll">
+                                <svg id="timeline-bars-svg" style="display:block;"></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tooltip (floating) -->
+                    <div id="timeline-tooltip" class="timeline-tooltip" style="display:none;"></div>
+                </div>
             </div>
         </main>
     </div>
@@ -387,11 +443,12 @@
             selectedRegions: [],
             selectedSectors: [],
             page: 1,
-            sortBy: 'Código proyecto',
+            sortBy: 'Fecha inicio del contrato de concesión',
             sortOrder: 'asc',
             lastMapProjects: [], // cache for map render on lazy tab switch
             selectedProjectCode: null, // track selected project for dimming
-            hoveredProjectCode: null // track hovered project code
+            hoveredProjectCode: null,  // track hovered project code
+            timelineOpen: false        // timeline panel visibility flag
         };
 
         // Chart references
@@ -561,8 +618,16 @@
                 appState.search = '';
                 appState.selectedRegions = [];
                 appState.selectedSectors = [];
-                appState.page = 1;
                 appState.selectedProjectCode = null;
+                appState.sortBy = 'Fecha inicio del contrato de concesión';
+                appState.sortOrder = 'asc';
+
+                document.querySelectorAll('.data-table th.sortable').forEach(el => {
+                    el.classList.remove('asc', 'desc');
+                    if (el.getAttribute('data-sort') === appState.sortBy) {
+                        el.classList.add(appState.sortOrder);
+                    }
+                });
 
                 document.querySelectorAll('.region-checkbox').forEach(cb => cb.checked = false);
                 document.querySelectorAll('.sector-checkbox').forEach(cb => cb.checked = false);
@@ -627,6 +692,9 @@
 
             // Setup initial icons
             lucide.createIcons();
+
+            // Initialize Timeline view events
+            initTimelineEvents();
         });
 
         // Toggle visual styling for visual tabs
@@ -783,6 +851,9 @@
                 if (elConstSub) elConstSub.textContent = `Construcción + Operación: ${resData.summary.hitos.comb_const_oper}`;
 
                 // 2. Rendering Table Row Items
+                if (appState.page === 1) {
+                    allLoadedContractsMap = {};
+                }
                 resData.data.forEach(item => {
                     if (item['Código proyecto']) {
                         allLoadedContractsMap[item['Código proyecto'].toString().trim()] = item;
@@ -822,6 +893,10 @@
                 updateMapStyles();
                 renderProjectMarkersOnMap(appState.lastMapProjects);
 
+                // 7. If timeline is open, re-render with updated data (all filtered projects)
+                if (appState.timelineOpen) {
+                    renderTimeline(resData.map_projects);
+                }
 
                 // Trigger Lucide refreshes
                 lucide.createIcons();
@@ -908,7 +983,7 @@
                 tr.innerHTML = `
                     <td><strong>${item['Nombre de uso común'] || item['Nombre de la Concesión '] || 'Sin nombre'}</strong></td>
                     <td>${item['Región geográfica'] || 'N/A'}</td>
-                    <td>${item['Sector del proyecto'] || 'N/A'}</td>
+                    <td>${item ? formatDate(item['Fecha inicio del contrato de concesión']) : 'N/A'}</td>
                     <td><span class="badge ${badgeClass}">${status}</span></td>
                 `;
 
@@ -948,124 +1023,14 @@
 
             const titleName = (item && item['Nombre de uso común']) || (item && item['Nombre de la Concesión ']) || (projectMetadata[cleanCode] && projectMetadata[cleanCode].name) || 'Concesión';
 
-            // Calculate timeline HTML
-            let timelineHTML = '';
-            if (item && item.group_timeline && item.group_timeline.length > 0) {
-                const milestones = [];
-                const todayDate = new Date();
-                const yyyy = todayDate.getFullYear();
-                const mm = String(todayDate.getMonth() + 1).padStart(2, '0');
-                const dd = String(todayDate.getDate()).padStart(2, '0');
-                const todayRawDate = `${yyyy}-${mm}-${dd}`;
-                const todayParsed = new Date(todayRawDate + 'T12:00:00');
-
-                item.group_timeline.forEach((node) => {
-                    let seqWord = `Concesión N°${node.seq}`;
-                    if (node.seq === 1) seqWord = 'Primera Concesión';
-                    else if (node.seq === 2) seqWord = 'Segunda Concesión';
-                    else if (node.seq === 3) seqWord = 'Tercera Concesión';
-                    else if (node.seq === 4) seqWord = 'Cuarta Concesión';
-
-                    const concLabel = `${seqWord}`;
-
-                    if (node.adjudication_date) {
-                        milestones.push({
-                            date: new Date(node.adjudication_date + 'T12:00:00'),
-                            rawDate: node.adjudication_date,
-                            type: 'adjudication',
-                            title: `${concLabel} - Adjudicación`,
-                            desc: `Decreto oficial.`,
-                            isCurrentContract: (node.code === cleanCode)
-                        });
-                    }
-                    if (node.start_date) {
-                        milestones.push({
-                            date: new Date(node.start_date + 'T12:00:00'),
-                            rawDate: node.start_date,
-                            type: 'start',
-                            title: `${concLabel} - Inicio Contrato`,
-                            desc: `Inicio formal de vigencia.`,
-                            isCurrentContract: (node.code === cleanCode)
-                        });
-                    }
-                    if (node.end_date) {
-                        milestones.push({
-                            date: new Date(node.end_date + 'T12:00:00'),
-                            rawDate: node.end_date,
-                            type: 'end',
-                            title: `${concLabel} - Término Contrato`,
-                            desc: `Fecha final de vigencia.`,
-                            isCurrentContract: (node.code === cleanCode)
-                        });
-                    }
-                });
-
-                milestones.push({
-                    date: todayParsed,
-                    rawDate: todayRawDate,
-                    type: 'today',
-                    title: 'Hoy (Fecha Actual)',
-                    desc: 'Momento actual.',
-                    isCurrentContract: false
-                });
-
-                milestones.sort((a, b) => a.date - b.date);
-
-                let nodesHTML = '';
-                milestones.forEach((ms) => {
-                    const isToday = (ms.type === 'today');
-                    let statusClass = 'future';
-                    if (isToday) statusClass = 'today';
-                    else if (ms.date < todayParsed) statusClass = 'completed';
-
-                    let typeIcon = 'calendar';
-                    if (ms.type === 'adjudication') typeIcon = 'award';
-                    else if (ms.type === 'start') typeIcon = 'play-circle';
-                    else if (ms.type === 'end') typeIcon = 'flag';
-                    else if (ms.type === 'today') typeIcon = 'clock';
-
-                    let formattedDateStr = 'Sin fecha';
-                    if (ms.rawDate) {
-                        const parts = ms.rawDate.split('-');
-                        if (parts.length === 3) {
-                            const year = parts[0];
-                            const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-                            const month = monthNames[parseInt(parts[1], 10) - 1];
-                            const day = parseInt(parts[2], 10);
-                            formattedDateStr = `${day} ${month} / ${year}`;
-                        }
-                    }
-
-                    const currentIndicator = ms.isCurrentContract ? '<span class="badge-timeline-current" style="margin-left: 0.35rem;">ACTIVA</span>' : '';
-
-                    nodesHTML += `
-                        <div class="timeline-item ${statusClass}">
-                            <div class="timeline-connector"></div>
-                            <div class="timeline-marker"></div>
-                            <div class="timeline-info">
-                                <div class="timeline-date-label">
-                                    <i data-lucide="${typeIcon}"></i>
-                                    <span>${formattedDateStr}</span>
-                                    ${currentIndicator}
-                                </div>
-                                <div class="timeline-title-label">${ms.title}</div>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                timelineHTML = `
-                    <div class="concession-timeline-section" style="margin-top: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem; width: 100%;">
-                        <h4 class="detail-title" style="margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 700; text-transform: uppercase;">
-                            <i data-lucide="git-commit" style="color: var(--primary);"></i> 
-                            Cronología & Hitos del Contrato
-                        </h4>
-                        <div class="linear-timeline">
-                            ${nodesHTML}
-                        </div>
-                    </div>
-                `;
-            }
+            const timelineBtnHTML = `
+                <div style="margin-top: 0.6rem; margin-bottom: 0.65rem;">
+                    <button id="btn-view-in-timeline" class="btn-action-link" style="width: 100%; justify-content: center; padding: 0.45rem 0.75rem; font-size: 0.76rem; font-weight: 600; background: linear-gradient(135deg, rgba(37,99,235,0.1), rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.3); color: var(--primary); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; gap: 0.4rem;">
+                        <i data-lucide="gantt-chart" style="width: 15px; height: 15px;"></i>
+                        Ver en línea de tiempo
+                    </button>
+                </div>
+            `;
 
             const linkCMF = item && item['Link a CMF de SC'] && item['Link a CMF de SC'] !== 'SIN' && item['Link a CMF de SC'] !== 'Sin informar'
                 ? `<a href="${item['Link a CMF de SC']}" target="_blank" class="btn-action-link" style="font-size: 0.72rem; padding: 0.3rem 0.6rem;"><i data-lucide="external-link"></i> Perfil CMF</a>`
@@ -1220,6 +1185,8 @@
 
                     ${relicitNavHTML}
 
+                    ${timelineBtnHTML}
+
                     <div class="detail-section">
                         <h4 class="detail-title" style="font-size: 0.78rem; margin-bottom: 0.35rem;">Descripción</h4>
                         <p class="detail-desc" style="font-size: 0.76rem; line-height: 1.45;">${(item && item['Descripción ']) || 'No se registra descripción en la base de datos.'}</p>
@@ -1256,14 +1223,20 @@
                         </div>
                     </div>
 
-                    ${timelineHTML}
-
                     <div class="detail-actions" style="margin-top: 0.5rem; gap: 0.4rem;">
                         ${linkMap}
                         ${linkCMF}
                         ${linkMOP}
                     </div>
                 `;
+            }
+
+            const btnViewTl = document.getElementById('btn-view-in-timeline');
+            if (btnViewTl) {
+                btnViewTl.addEventListener('click', () => {
+                    showTimelineView();
+                    renderTimeline(appState.lastMapProjects || [], cleanCode);
+                });
             }
 
             lucide.createIcons();
@@ -1668,8 +1641,7 @@
                 }
             }
 
-            const hasAnyActiveFilters = activeMapCodes.size > 0;
-            if (hasAnyActiveFilters && !isActive) {
+            if (!isActive) {
                 return {
                     color: 'transparent',
                     weight: 0,
@@ -2273,27 +2245,28 @@
                     return dateB.localeCompare(dateA);
                 });
 
-                // Render ONLY the most recent concession marker
+                // Render ONLY the most recent concession marker, but associate with all shared project codes
                 const bestEntry = group[0];
                 const proj = bestEntry.proj;
                 const marker = createSingleProjectMarker(proj, bestEntry.latLng, false, bestEntry.isMiniDot);
 
                 if (marker) {
                     marker.addTo(leafletMap);
-                    if (!projectMarkersMap[proj.code]) {
-                        projectMarkersMap[proj.code] = [];
-                    }
-                    projectMarkersMap[proj.code].push(marker);
+                    marker.associatedProjectCodes = group.map(g => g.proj.code);
+
+                    group.forEach(entry => {
+                        const code = entry.proj.code;
+                        if (!projectMarkersMap[code]) {
+                            projectMarkersMap[code] = [];
+                        }
+                        if (!projectMarkersMap[code].includes(marker)) {
+                            projectMarkersMap[code].push(marker);
+                        }
+                    });
                 }
             });
 
-            if (mapStatsBadge) {
-                let totalIcons = 0;
-                Object.values(projectMarkersMap).forEach(arr => {
-                    totalIcons += Array.isArray(arr) ? arr.length : 1;
-                });
-                mapStatsBadge.textContent = `${activeMapCodes.size} contratos (${totalIcons} íconos)`;
-            }
+            updateMapStyles();
         }
 
         function updateMapStyles() {
@@ -2338,8 +2311,7 @@
                         const isSelected = activeProj && activeProj.code === selectedCode;
                         const isHovered = activeProj && activeProj.code === appState.hoveredProjectCode;
 
-                        const hasAnyActiveFilters = activeMapCodes.size > 0;
-                        if (hasAnyActiveFilters && !isActive) {
+                        if (!isActive) {
                             l.setOpacity(0);
                             l.setZIndexOffset(-1000);
                             if (l.getElement()) {
@@ -2390,8 +2362,7 @@
                                 }
                             }
                         }
-                        const hasAnyActiveFilters = activeMapCodes.size > 0;
-                        const isLayerActive = !hasAnyActiveFilters || isActive;
+                        const isLayerActive = isActive;
 
                         if (l.getElement()) {
                             l.getElement().style.pointerEvents = isLayerActive ? 'auto' : 'none';
@@ -2403,63 +2374,62 @@
             const selectedCode = appState.selectedProjectCode;
             const hoveredCode = appState.hoveredProjectCode;
 
-            Object.keys(projectMarkersMap).forEach(code => {
-                const markersArr = projectMarkersMap[code];
-                if (!markersArr) return;
-
-                const isActiveInFilter = activeMapCodes.size === 0 || activeMapCodes.has(code);
-                const isSelected = selectedCode === code;
-                const isHovered = hoveredCode === code;
-
-                const list = Array.isArray(markersArr) ? markersArr : [markersArr];
-
-                list.forEach(marker => {
-                    if (!marker || !marker.getElement()) return;
-
-                    if (!isActiveInFilter) {
-                        marker.setOpacity(0);
-                        marker.setZIndexOffset(-1000);
-                        marker.getElement().style.pointerEvents = 'none';
-                    } else {
-                        marker.getElement().style.pointerEvents = 'auto';
-
-                        if (selectedCode) {
-                            const isTarget = isSelected || isHovered;
-                            marker.setOpacity(isTarget ? 1.0 : 0.35);
-                            marker.setZIndexOffset(isTarget ? 1000 : 100);
-                        } else {
-                            marker.setOpacity(1.0);
-                            marker.setZIndexOffset(100);
-                        }
-
-                        const el = marker.getElement().querySelector('.centroid-marker-pulse');
-
-                        if (el) {
-                            const secCfg = getSectorConfig(marker.projectSector);
-                            if (isSelected) {
-                                el.classList.add('active-selected');
-                                el.style.transform = marker.isMiniDot ? 'scale(2.2)' : 'scale(1.35)';
-                                if (marker.isMiniDot) el.style.boxShadow = `0 0 8px ${secCfg.color}`;
-                            } else if (isHovered) {
-                                el.classList.remove('active-selected');
-                                el.style.transform = marker.isMiniDot ? 'scale(1.8)' : 'scale(1.25)';
-                                if (marker.isMiniDot) el.style.boxShadow = `0 0 6px ${secCfg.color}`;
-                            } else {
-                                el.classList.remove('active-selected');
-                                el.style.transform = '';
-                                if (marker.isMiniDot) el.style.boxShadow = '';
-                            }
-                        }
-                    }
+            // Collect all unique marker instances
+            const allUniqueMarkers = new Set();
+            Object.values(projectMarkersMap).forEach(arr => {
+                const list = Array.isArray(arr) ? arr : [arr];
+                list.forEach(m => {
+                    if (m) allUniqueMarkers.add(m);
                 });
             });
 
+            allUniqueMarkers.forEach(marker => {
+                if (!marker || !marker.getElement()) return;
+
+                const codes = marker.associatedProjectCodes || [marker.projectCode];
+                const isActiveInFilter = codes.some(c => activeMapCodes.has(c));
+                const isSelected = codes.includes(selectedCode);
+                const isHovered = codes.includes(hoveredCode);
+
+                if (!isActiveInFilter) {
+                    marker.setOpacity(0);
+                    marker.setZIndexOffset(-1000);
+                    marker.getElement().style.pointerEvents = 'none';
+                } else {
+                    marker.getElement().style.pointerEvents = 'auto';
+
+                    if (selectedCode) {
+                        const isTarget = isSelected || isHovered;
+                        marker.setOpacity(isTarget ? 1.0 : 0.35);
+                        marker.setZIndexOffset(isTarget ? 1000 : 100);
+                    } else {
+                        marker.setOpacity(1.0);
+                        marker.setZIndexOffset(100);
+                    }
+
+                    const el = marker.getElement().querySelector('.centroid-marker-pulse');
+
+                    if (el) {
+                        const secCfg = getSectorConfig(marker.projectSector);
+                        if (isSelected) {
+                            el.classList.add('active-selected');
+                            el.style.transform = marker.isMiniDot ? 'scale(2.2)' : 'scale(1.35)';
+                            if (marker.isMiniDot) el.style.boxShadow = `0 0 8px ${secCfg.color}`;
+                        } else if (isHovered) {
+                            el.classList.remove('active-selected');
+                            el.style.transform = marker.isMiniDot ? 'scale(1.8)' : 'scale(1.25)';
+                            if (marker.isMiniDot) el.style.boxShadow = `0 0 6px ${secCfg.color}`;
+                        } else {
+                            el.classList.remove('active-selected');
+                            el.style.transform = '';
+                            if (marker.isMiniDot) el.style.boxShadow = '';
+                        }
+                    }
+                }
+            });
+
             if (mapStatsBadge) {
-                let totalIcons = 0;
-                Object.values(projectMarkersMap).forEach(arr => {
-                    totalIcons += Array.isArray(arr) ? arr.length : 1;
-                });
-                mapStatsBadge.textContent = `${activeMapCodes.size} contratos (${totalIcons} íconos)`;
+                mapStatsBadge.textContent = `${activeMapCodes.size} contratos (${allUniqueMarkers.size} íconos)`;
             }
         }
 
@@ -2531,6 +2501,512 @@
                         .setContent(content)
                         .openOn(leafletMap);
                 }, 1000);
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // TIMELINE VIEW — Gantt-style horizontal timeline
+        // ─────────────────────────────────────────────────────────────────────
+
+        const BAR_COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2'];
+        const ROW_H = 38;       // px per project row
+        const AXIS_H = 36;      // px for year axis
+        const LABEL_W = 190;    // px for label column
+        const BAR_PAD = 7;      // vertical padding inside row
+        const MILESTONE_R = 4;  // radius of milestone circles
+
+        // ── Show / Hide timeline ──────────────────────────────────────────────
+        function showTimelineView() {
+            appState.timelineOpen = true;
+            const grid = document.querySelector('.dashboard-grid');
+            const centerPanel = document.querySelector('.center-panel');
+            const rightPanel = document.querySelector('.right-panel');
+            const tlPanel = document.getElementById('timeline-full-panel');
+            if (grid) { grid.style.gridTemplateColumns = '240px 1fr'; }
+            if (centerPanel) { centerPanel.style.display = 'none'; }
+            if (rightPanel) { rightPanel.style.display = 'none'; }
+            if (tlPanel) { tlPanel.style.display = 'flex'; }
+            const kpiCard = document.getElementById('kpi-total-card');
+            if (kpiCard) kpiCard.classList.add('timeline-active');
+        }
+
+        function hideTimelineView() {
+            appState.timelineOpen = false;
+            const grid = document.querySelector('.dashboard-grid');
+            const centerPanel = document.querySelector('.center-panel');
+            const rightPanel = document.querySelector('.right-panel');
+            const tlPanel = document.getElementById('timeline-full-panel');
+            if (grid) { grid.style.gridTemplateColumns = '240px 1fr 500px'; }
+            if (centerPanel) { centerPanel.style.display = ''; }
+            if (rightPanel) { rightPanel.style.display = ''; }
+            if (tlPanel) { tlPanel.style.display = 'none'; }
+            const kpiCard = document.getElementById('kpi-total-card');
+            if (kpiCard) kpiCard.classList.remove('timeline-active');
+        }
+
+        // ── Group data by concession family (relicitaciones) ─────────────────
+        function buildTimelineGroups(data) {
+            const seen = new Map();  // canonicalKey → group object
+            const order = [];         // preserve first-seen order
+
+            data.forEach(item => {
+                const tl = item['group_timeline'];
+                if (!tl || !tl.length) return;
+
+                // Canonical key: sorted codes joined
+                const key = tl.map(t => t.code).sort().join('|');
+                if (seen.has(key)) return;
+
+                // Display name: use common name of first seq
+                const sorted = [...tl].sort((a, b) => a.seq - b.seq);
+                const displayName = sorted[0].name ||
+                    item['Nombre de uso común'] ||
+                    item['Nombre de la Concesión '] ||
+                    sorted[0].code;
+
+                seen.set(key, { name: displayName, segments: sorted });
+                order.push(key);
+            });
+
+            return order.map(k => seen.get(k));
+        }
+
+        // ── Parse date string → fractional year number ────────────────────────
+        function dateToYear(str) {
+            if (!str) return null;
+            const d = new Date(str);
+            if (isNaN(d.getTime())) return null;
+            const y = d.getFullYear();
+            const start = new Date(y, 0, 1);
+            const end = new Date(y + 1, 0, 1);
+            return y + (d - start) / (end - start);
+        }
+
+        // ── SVG helper: create element with attributes ────────────────────────
+        function svgEl(tag, attrs = {}) {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+            return el;
+        }
+
+        // ── Main render function ──────────────────────────────────────────────
+        function renderTimeline(data, highlightCode = null) {
+            const groups = buildTimelineGroups(data);
+            const badge = document.getElementById('timeline-count-badge');
+            if (badge) badge.textContent = `${groups.length} proyecto${groups.length !== 1 ? 's' : ''}`;
+
+            // Layout constants
+            const SUBLANE_H = 11;  // height of each individual bar
+            const SUBLANE_GAP = 4;   // gap between lanes in the same row
+            const ROW_PAD_V = 6;   // top/bottom padding within each row
+
+            // Per-group row metrics (variable heights)
+            const rowMetrics = groups.map(g => {
+                const n = g.segments.length;
+                const height = ROW_PAD_V * 2 + n * SUBLANE_H + Math.max(0, n - 1) * SUBLANE_GAP;
+                const laneYs = g.segments.map((_, si) =>
+                    ROW_PAD_V + si * (SUBLANE_H + SUBLANE_GAP)
+                );
+                return { height, laneYs };
+            });
+
+            // Cumulative row Y positions
+            const rowYOffsets = [];
+            let cumY = 0;
+            rowMetrics.forEach(m => { rowYOffsets.push(cumY); cumY += m.height; });
+            const totalH = cumY;
+
+            // Track index of highlighted row for auto-scrolling
+            let highlightedRowIdx = -1;
+
+            // Compute global year range
+            let minYear = Infinity, maxYear = -Infinity;
+            const todayYear = dateToYear(new Date().toISOString().slice(0, 10));
+
+            groups.forEach(g => {
+                g.segments.forEach(seg => {
+                    [seg.start_date, seg.end_date,
+                    seg.resolution_date, seg.adjudication_date].forEach(d => {
+                        const y = dateToYear(d);
+                        if (y !== null) {
+                            if (y < minYear) minYear = y;
+                            if (y > maxYear) maxYear = y;
+                        }
+                    });
+                });
+            });
+
+            if (!isFinite(minYear)) { minYear = 1990; maxYear = 2070; }
+            minYear = Math.floor((minYear - 1) / 5) * 5;
+            maxYear = Math.ceil((maxYear + 1) / 5) * 5;
+
+            // DOM references
+            const barsEl = document.getElementById('timeline-bars-scroll');
+            const labelEl = document.getElementById('timeline-label-col');
+            const barsSvg = document.getElementById('timeline-bars-svg');
+            const axisSvg = document.getElementById('timeline-axis-svg');
+
+            // Chart dimensions
+            const availW = (barsEl.parentElement.parentElement.offsetWidth || 900) - LABEL_W - 2;
+            const chartW = Math.max(availW, 100);  // never zero, fills container
+            const yearRange = maxYear - minYear;
+            function toPx(y) { return ((y - minYear) / yearRange) * chartW; }
+
+            const isLight = document.body.classList.contains('light-theme');
+            const textColor = isLight ? '#374151' : '#94a3b8';
+            const gridColor = isLight ? 'rgba(0,0,0,0.055)' : 'rgba(255,255,255,0.055)';
+            const rowAltColor = isLight ? 'rgba(241,245,249,0.7)' : 'rgba(255,255,255,0.018)';
+            const labelBg = isLight ? '#f8fafc' : '#0f1626';
+            const labelColor = isLight ? '#1e293b' : '#e2e8f0';
+            const sepColor = isLight ? 'rgba(0,0,0,0.09)' : 'rgba(255,255,255,0.07)';
+
+            const cleanHighlight = highlightCode ? highlightCode.toString().trim() : null;
+
+            // BUILD LABELS
+            labelEl.innerHTML = '';
+            const labelSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            labelSvg.setAttribute('width', LABEL_W);
+            labelSvg.setAttribute('height', totalH);
+            labelSvg.style.display = 'block';
+
+            groups.forEach((g, i) => {
+                const rowY = rowYOffsets[i];
+                const rowH = rowMetrics[i].height;
+                const isHighlighted = cleanHighlight && g.segments.some(s => s.code && s.code.toString().trim() === cleanHighlight);
+
+                if (isHighlighted) {
+                    highlightedRowIdx = i;
+                }
+
+                const rowBg = isHighlighted
+                    ? (isLight ? 'rgba(37, 99, 235, 0.18)' : 'rgba(37, 99, 235, 0.30)')
+                    : (i % 2 === 0 ? rowAltColor : 'transparent');
+
+                labelSvg.appendChild(svgEl('rect', {
+                    x: 0, y: rowY, width: LABEL_W, height: rowH, fill: rowBg
+                }));
+
+                if (isHighlighted) {
+                    labelSvg.appendChild(svgEl('rect', {
+                        x: 0, y: rowY, width: 4, height: rowH, fill: 'var(--primary)'
+                    }));
+                }
+
+                labelSvg.appendChild(svgEl('line', {
+                    x1: 0, y1: rowY + rowH, x2: LABEL_W, y2: rowY + rowH,
+                    stroke: isHighlighted ? 'rgba(37, 99, 235, 0.3)' : sepColor, 'stroke-width': 1
+                }));
+
+                const maxChars = 26;
+                const name = g.name && g.name.length > maxChars
+                    ? g.name.slice(0, maxChars) + '\u2026'
+                    : (g.name || '\u2014');
+
+                const txt = svgEl('text', {
+                    x: LABEL_W - 10, y: rowY + rowH / 2,
+                    'text-anchor': 'end', 'dominant-baseline': 'middle',
+                    fill: isHighlighted ? 'var(--primary)' : labelColor,
+                    'font-family': "'Plus Jakarta Sans', sans-serif",
+                    'font-size': '10', 'font-weight': isHighlighted ? '700' : '500'
+                });
+                txt.textContent = name;
+
+                const ttl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                ttl.textContent = g.name || '\u2014';
+                txt.appendChild(ttl);
+                labelSvg.appendChild(txt);
+
+                // Colored lane dots on the left when >1 segment
+                if (g.segments.length > 1) {
+                    g.segments.forEach((seg, si) => {
+                        const laneY = rowY + rowMetrics[i].laneYs[si];
+                        const color = BAR_COLORS[Math.min(si, BAR_COLORS.length - 1)];
+                        labelSvg.appendChild(svgEl('circle', {
+                            cx: 10, cy: laneY + SUBLANE_H / 2, r: 3, fill: color
+                        }));
+                    });
+                }
+            });
+            labelEl.appendChild(labelSvg);
+
+            // BUILD AXIS
+            axisSvg.setAttribute('width', chartW);
+            axisSvg.setAttribute('height', AXIS_H);
+            axisSvg.innerHTML = '';
+
+            axisSvg.appendChild(svgEl('rect', {
+                x: 0, y: 0, width: chartW, height: AXIS_H, fill: labelBg
+            }));
+
+            for (let yr = minYear; yr <= maxYear; yr += 5) {
+                const x = toPx(yr);
+                axisSvg.appendChild(svgEl('line', {
+                    x1: x, y1: AXIS_H - 8, x2: x, y2: AXIS_H,
+                    stroke: isLight ? '#cbd5e1' : '#334155', 'stroke-width': 1
+                }));
+                const lbl = svgEl('text', {
+                    x: x, y: AXIS_H - 12, 'text-anchor': 'middle',
+                    fill: textColor,
+                    'font-family': "'Plus Jakarta Sans', sans-serif",
+                    'font-size': '10', 'font-weight': '500'
+                });
+                lbl.textContent = yr;
+                axisSvg.appendChild(lbl);
+            }
+
+            if (todayYear >= minYear && todayYear <= maxYear) {
+                const tx = toPx(todayYear);
+                axisSvg.appendChild(svgEl('line', {
+                    x1: tx, y1: 0, x2: tx, y2: AXIS_H,
+                    stroke: '#ef4444', 'stroke-width': 1.5, 'stroke-dasharray': '3,3'
+                }));
+                const todayLbl = svgEl('text', {
+                    x: tx + 3, y: 12, fill: '#ef4444',
+                    'font-family': "'Plus Jakarta Sans', sans-serif",
+                    'font-size': '9', 'font-weight': '700'
+                });
+                todayLbl.textContent = 'Hoy';
+                axisSvg.appendChild(todayLbl);
+            }
+
+            axisSvg.appendChild(svgEl('line', {
+                x1: 0, y1: AXIS_H - 1, x2: chartW, y2: AXIS_H - 1,
+                stroke: isLight ? '#e2e8f0' : '#1e293b', 'stroke-width': 1
+            }));
+
+            // BUILD BARS
+            barsSvg.setAttribute('width', chartW);
+            barsSvg.setAttribute('height', totalH || 1);
+            barsSvg.innerHTML = '';
+
+            groups.forEach((g, i) => {
+                const rowY = rowYOffsets[i];
+                const rowH = rowMetrics[i].height;
+                const isHighlighted = cleanHighlight && g.segments.some(s => s.code && s.code.toString().trim() === cleanHighlight);
+
+                const rowBg = isHighlighted
+                    ? (isLight ? 'rgba(37, 99, 235, 0.12)' : 'rgba(37, 99, 235, 0.22)')
+                    : (i % 2 === 0 ? rowAltColor : 'transparent');
+
+                barsSvg.appendChild(svgEl('rect', {
+                    x: 0, y: rowY, width: chartW, height: rowH, fill: rowBg
+                }));
+
+                barsSvg.appendChild(svgEl('line', {
+                    x1: 0, y1: rowY + rowH, x2: chartW, y2: rowY + rowH,
+                    stroke: isHighlighted ? 'rgba(37, 99, 235, 0.3)' : sepColor, 'stroke-width': 1
+                }));
+
+                for (let yr = minYear; yr <= maxYear; yr += 5) {
+                    barsSvg.appendChild(svgEl('line', {
+                        x1: toPx(yr), y1: rowY, x2: toPx(yr), y2: rowY + rowH,
+                        stroke: gridColor, 'stroke-width': 1
+                    }));
+                }
+
+                // "Hoy" full-row vertical line
+                if (todayYear >= minYear && todayYear <= maxYear) {
+                    barsSvg.appendChild(svgEl('line', {
+                        x1: toPx(todayYear), y1: rowY,
+                        x2: toPx(todayYear), y2: rowY + rowH,
+                        stroke: '#ef4444', 'stroke-width': 1.2,
+                        'stroke-dasharray': '3,3', 'pointer-events': 'none'
+                    }));
+                }
+
+                // Segments: each in its own sub-lane
+                g.segments.forEach((seg, si) => {
+                    const color = BAR_COLORS[Math.min(si, BAR_COLORS.length - 1)];
+                    const laneY = rowY + rowMetrics[i].laneYs[si];
+                    const startY = dateToYear(seg.start_date);
+                    const endY = dateToYear(seg.end_date);
+                    const isCurrentSeg = cleanHighlight && seg.code && seg.code.toString().trim() === cleanHighlight;
+
+                    if (startY !== null && endY !== null) {
+                        const bx = toPx(startY);
+                        const bw = Math.max(toPx(endY) - bx, 2);
+                        const by = laneY;
+                        const bh = SUBLANE_H;
+
+                        const rect = svgEl('rect', {
+                            x: bx, y: by, width: bw, height: bh,
+                            rx: 3, ry: 3, fill: color,
+                            opacity: isCurrentSeg ? 1 : 0.82
+                        });
+                        rect.style.cursor = 'pointer';
+
+                        if (isCurrentSeg) {
+                            rect.setAttribute('stroke', '#ffffff');
+                            rect.setAttribute('stroke-width', '1.5');
+                            rect.setAttribute('filter', 'drop-shadow(0 0 6px ' + color + ')');
+                        }
+
+                        rect.addEventListener('mouseenter', (e) => {
+                            rect.setAttribute('opacity', '1');
+                            rect.setAttribute('filter', 'drop-shadow(0 2px 5px rgba(0,0,0,0.22))');
+                            showTimelineTooltip(e, seg, si + 1, color);
+                        });
+                        rect.addEventListener('mousemove', (e) => moveTimelineTooltip(e));
+                        rect.addEventListener('mouseleave', () => {
+                            rect.setAttribute('opacity', isCurrentSeg ? '1' : '0.82');
+                            if (!isCurrentSeg) rect.removeAttribute('filter');
+                            else rect.setAttribute('filter', 'drop-shadow(0 0 6px ' + color + ')');
+                            hideTimelineTooltip();
+                        });
+                        rect.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            hideTimelineTooltip();
+                            hideTimelineView();
+                            if (seg.code) {
+                                zoomToProjectCode(seg.code);
+                            }
+                        });
+
+                        barsSvg.appendChild(rect);
+
+                        if (bw > 20) {
+                            const seqTxt = svgEl('text', {
+                                x: bx + 4, y: by + bh / 2 + 0.5,
+                                'dominant-baseline': 'middle',
+                                fill: '#ffffff',
+                                'font-family': "'Plus Jakarta Sans', sans-serif",
+                                'font-size': '8', 'font-weight': '700',
+                                'pointer-events': 'none'
+                            });
+                            seqTxt.textContent = `${seg.seq}\u00ba`;
+                            barsSvg.appendChild(seqTxt);
+                        }
+                    }
+
+                    // Milestone diamond: adjudication_date
+                    const adjY = dateToYear(seg.adjudication_date);
+                    if (adjY !== null && adjY >= minYear && adjY <= maxYear) {
+                        const mx = toPx(adjY);
+                        const my = laneY + SUBLANE_H / 2;
+                        const d = MILESTONE_R;
+                        barsSvg.appendChild(svgEl('polygon', {
+                            points: `${mx},${my - d} ${mx + d},${my} ${mx},${my + d} ${mx - d},${my}`,
+                            fill: '#7c3aed', stroke: '#ffffff', 'stroke-width': 1,
+                            'pointer-events': 'none'
+                        }));
+                    }
+
+                    // Milestone circle: resolution_date
+                    const resY = dateToYear(seg.resolution_date);
+                    if (resY !== null && resY >= minYear && resY <= maxYear) {
+                        barsSvg.appendChild(svgEl('circle', {
+                            cx: toPx(resY), cy: laneY - 2,
+                            r: MILESTONE_R - 1,
+                            fill: '#f59e0b', stroke: '#ffffff', 'stroke-width': 1,
+                            'pointer-events': 'none'
+                        }));
+                    }
+                });
+            });
+
+            // Sync vertical scroll from bars container to label column
+            const barsScrollEl = document.getElementById('timeline-bars-scroll');
+            const labelColEl = document.getElementById('timeline-label-col');
+            if (barsScrollEl && labelColEl) {
+                barsScrollEl.onscroll = () => {
+                    labelColEl.scrollTop = barsScrollEl.scrollTop;
+                };
+            }
+
+            // Auto-scroll to highlighted row if specified
+            if (highlightedRowIdx !== -1 && rowYOffsets[highlightedRowIdx] !== undefined && barsScrollEl) {
+                setTimeout(() => {
+                    const rowY = rowYOffsets[highlightedRowIdx];
+                    const rowH = rowMetrics[highlightedRowIdx].height;
+                    const targetScroll = Math.max(0, rowY - (barsScrollEl.clientHeight / 2) + (rowH / 2));
+                    barsScrollEl.scrollTo({ top: targetScroll, behavior: 'smooth' });
+                }, 60);
+            }
+        }
+
+
+        // 
+        // ── Tooltip helpers ───────────────────────────────────────────
+        function showTimelineTooltip(e, seg, licitNum, color) {
+            const tip = document.getElementById('timeline-tooltip');
+            if (!tip) return;
+            const fmt = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-CL', { year: 'numeric', month: 'short' }) : '—';
+            tip.innerHTML = `
+                <span class="timeline-tooltip-name" style="color:${color};">${seg.name || '—'}</span>
+                <div class="timeline-tooltip-row">
+                    <span class="timeline-tooltip-label">Licitación</span>
+                    <span class="timeline-tooltip-val">${licitNum}ª</span>
+                </div>
+                <div class="timeline-tooltip-row">
+                    <span class="timeline-tooltip-label">Estado</span>
+                    <span class="timeline-tooltip-val">${seg.status || '—'}</span>
+                </div>
+                <div class="timeline-tooltip-row">
+                    <span class="timeline-tooltip-label">Inicio</span>
+                    <span class="timeline-tooltip-val">${fmt(seg.start_date)}</span>
+                </div>
+                <div class="timeline-tooltip-row">
+                    <span class="timeline-tooltip-label">Término</span>
+                    <span class="timeline-tooltip-val">${fmt(seg.end_date)}</span>
+                </div>
+                ${seg.adj ? `<div class="timeline-tooltip-row">
+                    <span class="timeline-tooltip-label">Adjudicación</span>
+                    <span class="timeline-tooltip-val">${fmt(seg.adj)}</span>
+                </div>` : ''}
+            `;
+            tip.style.display = 'block';
+            moveTimelineTooltip(e);
+        }
+
+        function moveTimelineTooltip(e) {
+            const tip = document.getElementById('timeline-tooltip');
+            if (!tip || tip.style.display === 'none') return;
+            const tw = tip.offsetWidth + 16;
+            const th = tip.offsetHeight + 8;
+            let tx = e.clientX + 14;
+            let ty = e.clientY - th / 2;
+            if (tx + tw > window.innerWidth) tx = e.clientX - tw;
+            if (ty < 4) ty = 4;
+            if (ty + th > window.innerHeight) ty = window.innerHeight - th - 4;
+            tip.style.left = tx + 'px';
+            tip.style.top = ty + 'px';
+        }
+
+        function hideTimelineTooltip() {
+            const tip = document.getElementById('timeline-tooltip');
+            if (tip) tip.style.display = 'none';
+        }
+
+        // ── Wire up events (called from DOMContentLoaded) ─────────────
+        function initTimelineEvents() {
+            const kpiCard = document.getElementById('kpi-total-card');
+            if (kpiCard) {
+                kpiCard.addEventListener('click', () => {
+                    if (appState.timelineOpen) {
+                        hideTimelineView();
+                    } else {
+                        showTimelineView();
+                        renderTimeline(appState.lastMapProjects || []);
+                    }
+                });
+            }
+
+            const closeBtn = document.getElementById('btn-close-timeline');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => hideTimelineView());
+            }
+
+            // Forward wheel events from the label column to the bars scroller.
+            // The label col has overflow-y:hidden so the browser won't scroll it
+            // natively — we intercept wheel events and delegate to barsScrollEl,
+            // which in turn syncs the label position via its onscroll handler.
+            const labelCol = document.getElementById('timeline-label-col');
+            if (labelCol) {
+                labelCol.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const barsScroll = document.getElementById('timeline-bars-scroll');
+                    if (barsScroll) barsScroll.scrollTop += e.deltaY;
+                }, { passive: false });
             }
         }
     </script>
