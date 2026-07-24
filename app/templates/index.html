@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -16,7 +16,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
-<body>
+<body class="light-theme">
     <div class="app-container">
         <!-- Top Navigation Banner -->
         <header class="top-navbar">
@@ -43,10 +43,6 @@
                                 <i data-lucide="sliders-horizontal" style="width: 15px; height: 15px;"></i>
                                 Filtros & Búsqueda
                             </h2>
-                            <button class="btn-toggle" id="theme-toggle" title="Cambiar tema">
-                                <span class="sun-icon"><i data-lucide="sun"></i></span>
-                                <span class="moon-icon"><i data-lucide="moon"></i></span>
-                            </button>
                         </div>
 
                         <!-- General Search -->
@@ -473,7 +469,7 @@
         const btnNext = document.getElementById('btn-next');
         const paginationInfo = document.getElementById('pagination-info');
 
-        const themeToggle = document.getElementById('theme-toggle');
+
 
         const mapStatsBadge = document.getElementById('map-stats-badge');
         const btnResetMap = document.getElementById('btn-reset-map');
@@ -488,10 +484,6 @@
 
         // Document initialized
         document.addEventListener('DOMContentLoaded', () => {
-            // Apply theme from localStorage if saved
-            if (localStorage.getItem('theme') === 'light') {
-                document.body.classList.add('light-theme');
-            }
 
             if (btnBackToList) {
                 btnBackToList.addEventListener('click', () => {
@@ -628,18 +620,7 @@
                 });
             });
 
-            // Bind theme toggle
-            themeToggle.addEventListener('click', () => {
-                document.body.classList.toggle('light-theme');
-                const path = document.body.classList.contains('light-theme') ? 'light' : 'dark';
-                localStorage.setItem('theme', path);
 
-                // Update map tile layer for the theme change
-                updateMapTileLayer();
-
-                // Redraw chart values
-                fetchData();
-            });
 
             // Initialize Leaflet Map
             initLeafletMap();

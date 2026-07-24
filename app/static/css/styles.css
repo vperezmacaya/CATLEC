@@ -243,40 +243,6 @@ body.light-theme .top-navbar {
     padding: 0.5rem;
 }
 
-/* Theme Toggle Button */
-.btn-toggle {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    padding: 0.35rem;
-    border-radius: 50%;
-    cursor: pointer;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--transition-fast);
-}
-
-.btn-toggle:hover {
-    background-color: var(--border-color);
-    color: var(--text-primary);
-    transform: rotate(15deg);
-}
-
-.btn-toggle svg {
-    width: 15px;
-    height: 15px;
-}
-
-body.light-theme .sun-icon {
-    display: none;
-}
-
-body:not(.light-theme) .moon-icon {
-    display: none;
-}
 
 /* Dashboard Body Wrapper */
 .dashboard-content {
