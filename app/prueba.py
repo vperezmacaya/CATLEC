@@ -190,7 +190,9 @@ for idx, row in df_contracts.iterrows():
     BASE_GROUPS.setdefault(base_code, []).append({
         'code': code,
         'seq': seq,
-        'name': sanitize_value(row.get('Nombre de uso común')) or sanitize_value(row.get('Nombre de la Concesión ')),
+        'name': sanitize_value(row.get('Nombre de la Concesión ')) or sanitize_value(row.get('Nombre de uso común')),
+        'concession_name': sanitize_value(row.get('Nombre de la Concesión ')),
+        'common_name': sanitize_value(row.get('Nombre de uso común')),
         'status': sanitize_value(row['ESTADO']),
         'resolution_date': sanitize_value(row['Fecha resolución declaración interes público']),
         'adjudication_date': sanitize_value(row['Fecha decreto adjudicación']),

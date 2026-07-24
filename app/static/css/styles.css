@@ -1781,8 +1781,8 @@ body:not(.light-theme) .timeline-axis-wrapper {
 }
 
 .timeline-label-col {
-    width: 190px;
-    min-width: 190px;
+    width: 210px;
+    min-width: 210px;
     flex-shrink: 0;
     border-right: 1px solid var(--border-color);
     background-color: rgba(248, 250, 252, 0.95);
@@ -1825,7 +1825,7 @@ body:not(.light-theme) .timeline-label-col {
 }
 
 #timeline-label-col {
-    width: 190px;
+    width: 210px;
     height: 100%;
     overflow-y: hidden;
     overflow-x: hidden;

@@ -21,7 +21,7 @@
         <!-- Top Navigation Banner -->
         <header class="top-navbar">
             <div class="top-navbar-left">
-                <span class="top-navbar-brand">CATLEC</span>
+                <span class="top-navbar-brand">CONCESIONES</span>
                 <span class="top-navbar-divider"></span>
                 <span class="top-navbar-proto">Prototipo en desarrollo: Mapa de Proyectos Concesiones Chile</span>
             </div>
@@ -265,7 +265,7 @@
                             title="Ver línea de tiempo de proyectos">
                             <div class="kpi-icon"><i data-lucide="file-text"></i></div>
                             <div class="kpi-val-container">
-                                <span class="kpi-label">Proyectos totales</span>
+                                <span class="kpi-label">Contratos totales</span>
                                 <span class="kpi-value" id="kpi-total">-</span>
                             </div>
                             <i data-lucide="gantt-chart" class="kpi-timeline-hint"></i>
@@ -408,7 +408,9 @@
 
                     <!-- Timeline Year Axis (sticky) -->
                     <div class="timeline-axis-wrapper">
-                        <div class="timeline-label-col"></div>
+                        <div class="timeline-label-col" style="display: flex; align-items: center; padding-left: 12px; font-family: var(--font-heading); font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">
+                            Infraestructura
+                        </div>
                         <div class="timeline-axis-scroll" id="timeline-axis-scroll">
                             <svg id="timeline-axis-svg" style="display:block;"></svg>
                         </div>
@@ -423,9 +425,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Tooltip (floating) -->
-                    <div id="timeline-tooltip" class="timeline-tooltip" style="display:none;"></div>
                 </div>
             </div>
         </main>
@@ -2511,9 +2510,27 @@
         const BAR_COLORS = ['#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2'];
         const ROW_H = 38;       // px per project row
         const AXIS_H = 36;      // px for year axis
-        const LABEL_W = 190;    // px for label column
+        const LABEL_W = 210;    // px for label column
         const BAR_PAD = 7;      // vertical padding inside row
         const MILESTONE_R = 4;  // radius of milestone circles
+
+        function wrapTimelineText(text, maxCharsPerLine = 27) {
+            if (!text) return ['—'];
+            const words = text.toString().split(' ');
+            const lines = [];
+            let currentLine = '';
+
+            words.forEach(w => {
+                if ((currentLine + (currentLine ? ' ' : '') + w).length <= maxCharsPerLine) {
+                    currentLine += (currentLine ? ' ' : '') + w;
+                } else {
+                    if (currentLine) lines.push(currentLine);
+                    currentLine = w;
+                }
+            });
+            if (currentLine) lines.push(currentLine);
+            return lines.length > 0 ? lines : [text];
+        }
 
         // ── Show / Hide timeline ──────────────────────────────────────────────
         function showTimelineView() {
@@ -2544,33 +2561,6 @@
             if (kpiCard) kpiCard.classList.remove('timeline-active');
         }
 
-        // ── Group data by concession family (relicitaciones) ─────────────────
-        function buildTimelineGroups(data) {
-            const seen = new Map();  // canonicalKey → group object
-            const order = [];         // preserve first-seen order
-
-            data.forEach(item => {
-                const tl = item['group_timeline'];
-                if (!tl || !tl.length) return;
-
-                // Canonical key: sorted codes joined
-                const key = tl.map(t => t.code).sort().join('|');
-                if (seen.has(key)) return;
-
-                // Display name: use common name of first seq
-                const sorted = [...tl].sort((a, b) => a.seq - b.seq);
-                const displayName = sorted[0].name ||
-                    item['Nombre de uso común'] ||
-                    item['Nombre de la Concesión '] ||
-                    sorted[0].code;
-
-                seen.set(key, { name: displayName, segments: sorted });
-                order.push(key);
-            });
-
-            return order.map(k => seen.get(k));
-        }
-
         // ── Parse date string → fractional year number ────────────────────────
         function dateToYear(str) {
             if (!str) return null;
@@ -2580,6 +2570,56 @@
             const start = new Date(y, 0, 1);
             const end = new Date(y + 1, 0, 1);
             return y + (d - start) / (end - start);
+        }
+
+        function getGroupEarliestStartDate(g) {
+            if (!g || !g.segments || !g.segments.length) return Infinity;
+            let earliest = Infinity;
+            g.segments.forEach(seg => {
+                if (seg.start_date) {
+                    const y = dateToYear(seg.start_date);
+                    if (y !== null && y < earliest) {
+                        earliest = y;
+                    }
+                }
+            });
+            return earliest;
+        }
+
+        // ── Group data by concession family (relicitaciones) ─────────────────
+        function buildTimelineGroups(data) {
+            const seen = new Map();  // canonicalKey → group object
+
+            data.forEach(item => {
+                const tl = item['group_timeline'];
+                if (!tl || !tl.length) return;
+
+                // Canonical key: sorted codes joined
+                const key = tl.map(t => t.code).sort().join('|');
+                if (seen.has(key)) return;
+
+                // Display name: use "Nombre de la Concesión " of df_contracts
+                const sorted = [...tl].sort((a, b) => a.seq - b.seq);
+                const displayName = item['Nombre de la Concesión '] ||
+                    (sorted[0] && sorted[0].concession_name) ||
+                    (sorted[0] && sorted[0].name) ||
+                    item['Nombre de uso común'] ||
+                    (sorted[0] && sorted[0].code) ||
+                    'Sin nombre';
+
+                seen.set(key, { name: displayName, segments: sorted });
+            });
+
+            const groupsList = Array.from(seen.values());
+
+            // ALWAYS sort from oldest to newest based on contract start date
+            groupsList.sort((a, b) => {
+                const yearA = getGroupEarliestStartDate(a);
+                const yearB = getGroupEarliestStartDate(b);
+                return yearA - yearB;
+            });
+
+            return groupsList;
         }
 
         // ── SVG helper: create element with attributes ────────────────────────
@@ -2600,14 +2640,19 @@
             const SUBLANE_GAP = 4;   // gap between lanes in the same row
             const ROW_PAD_V = 6;   // top/bottom padding within each row
 
-            // Per-group row metrics (variable heights)
+            // Per-group row metrics (variable heights with multiline text wrapping)
             const rowMetrics = groups.map(g => {
                 const n = g.segments.length;
-                const height = ROW_PAD_V * 2 + n * SUBLANE_H + Math.max(0, n - 1) * SUBLANE_GAP;
+                const lines = wrapTimelineText(g.name, 27);
+                const textH = lines.length * 13;
+                const barLanesH = n * SUBLANE_H + Math.max(0, n - 1) * SUBLANE_GAP;
+                const height = Math.max(ROW_PAD_V * 2 + barLanesH, textH + ROW_PAD_V * 2);
+
+                const startLaneY = (height - barLanesH) / 2;
                 const laneYs = g.segments.map((_, si) =>
-                    ROW_PAD_V + si * (SUBLANE_H + SUBLANE_GAP)
+                    startLaneY + si * (SUBLANE_H + SUBLANE_GAP)
                 );
-                return { height, laneYs };
+                return { height, laneYs, lines };
             });
 
             // Cumulative row Y positions
@@ -2697,35 +2742,36 @@
                     stroke: isHighlighted ? 'rgba(37, 99, 235, 0.3)' : sepColor, 'stroke-width': 1
                 }));
 
-                const maxChars = 26;
-                const name = g.name && g.name.length > maxChars
-                    ? g.name.slice(0, maxChars) + '\u2026'
-                    : (g.name || '\u2014');
+                const lines = rowMetrics[i].lines;
+                const lineCount = lines.length;
 
                 const txt = svgEl('text', {
-                    x: LABEL_W - 10, y: rowY + rowH / 2,
-                    'text-anchor': 'end', 'dominant-baseline': 'middle',
+                    x: 12,
+                    y: rowY + rowH / 2,
+                    'text-anchor': 'start',
+                    'dominant-baseline': 'middle',
                     fill: isHighlighted ? 'var(--primary)' : labelColor,
                     'font-family': "'Plus Jakarta Sans', sans-serif",
-                    'font-size': '10', 'font-weight': isHighlighted ? '700' : '500'
+                    'font-size': '10',
+                    'font-weight': isHighlighted ? '700' : '500'
                 });
-                txt.textContent = name;
+
+                const lineHeight = 13;
+                const startDY = -((lineCount - 1) * lineHeight) / 2;
+
+                lines.forEach((lineStr, lineIdx) => {
+                    const tspan = svgEl('tspan', {
+                        x: 12,
+                        dy: lineIdx === 0 ? startDY : lineHeight
+                    });
+                    tspan.textContent = lineStr;
+                    txt.appendChild(tspan);
+                });
 
                 const ttl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
                 ttl.textContent = g.name || '\u2014';
                 txt.appendChild(ttl);
                 labelSvg.appendChild(txt);
-
-                // Colored lane dots on the left when >1 segment
-                if (g.segments.length > 1) {
-                    g.segments.forEach((seg, si) => {
-                        const laneY = rowY + rowMetrics[i].laneYs[si];
-                        const color = BAR_COLORS[Math.min(si, BAR_COLORS.length - 1)];
-                        labelSvg.appendChild(svgEl('circle', {
-                            cx: 10, cy: laneY + SUBLANE_H / 2, r: 3, fill: color
-                        }));
-                    });
-                }
             });
             labelEl.appendChild(labelSvg);
 
@@ -2932,7 +2978,7 @@
             if (!tip) return;
             const fmt = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-CL', { year: 'numeric', month: 'short' }) : '—';
             tip.innerHTML = `
-                <span class="timeline-tooltip-name" style="color:${color};">${seg.name || '—'}</span>
+                <span class="timeline-tooltip-name" style="color:${color};">${seg.common_name || seg.name || '—'}</span>
                 <div class="timeline-tooltip-row">
                     <span class="timeline-tooltip-label">Licitación</span>
                     <span class="timeline-tooltip-val">${licitNum}ª</span>
@@ -2961,13 +3007,19 @@
         function moveTimelineTooltip(e) {
             const tip = document.getElementById('timeline-tooltip');
             if (!tip || tip.style.display === 'none') return;
-            const tw = tip.offsetWidth + 16;
-            const th = tip.offsetHeight + 8;
-            let tx = e.clientX + 14;
-            let ty = e.clientY - th / 2;
-            if (tx + tw > window.innerWidth) tx = e.clientX - tw;
-            if (ty < 4) ty = 4;
-            if (ty + th > window.innerHeight) ty = window.innerHeight - th - 4;
+            const tw = tip.offsetWidth;
+            const th = tip.offsetHeight;
+            let tx = e.clientX + 12;
+            let ty = e.clientY - 12;
+
+            if (tx + tw + 10 > window.innerWidth) {
+                tx = e.clientX - tw - 12;
+            }
+            if (ty + th + 10 > window.innerHeight) {
+                ty = window.innerHeight - th - 10;
+            }
+            if (ty < 10) ty = 10;
+
             tip.style.left = tx + 'px';
             tip.style.top = ty + 'px';
         }
@@ -3010,6 +3062,7 @@
             }
         }
     </script>
+    <div id="timeline-tooltip" class="timeline-tooltip" style="display:none;"></div>
 </body>
 
 </html>
