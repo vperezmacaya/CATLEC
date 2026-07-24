@@ -1,0 +1,4 @@
+Aeropuertos_de_Chile_DGC.json: 12 features. Keys: ['COD', 'Nombre', 'Region']
+Hospitales_Concesionados_DGC.json: 23 features. Keys: ['COD', 'NOM']
+miscelaneo_dgc.json: 45 features. Keys: ['COD', 'NOM', 'description', 'fill', 'fill-opacity', 'name', 'stroke', 'stroke-opacity', 'stroke-width', 'styleUrl', 'text']
+Rutas_DGC.json: 137 features. Keys: ['CLASIFICAC', 'COD', 'ESTADO', 'FICHA', 'ID_FICHA', 'LONGITUD', 'NAME', 'SHAPE_Leng', 'TIPO', 'TIPOLOGIA']

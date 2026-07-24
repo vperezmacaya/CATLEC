@@ -1,0 +1,18 @@
+COLUMNS:
+['Código proyecto', 'Nombre de la Concesión ', 'NUM_Lic', 'Nombre de uso común', 'Descripción ', 'Sector del proyecto', 'Región geográfica', 'Link a mapa página web', 'Origen', 'Fecha resolución declaración interes público', 'Presupuesto oficial estimado', 'Moneda', 'Link pagina web concesiones', 'ESTADO', 'Metodo de licitación', 'Variable(s) de licitación', 'Fecha llamado a licitación', 'Fecha recepción ofertas', 'Fecha apertura económica', 'Fecha decreto adjudicación', 'Fecha publicación decreto adjudicación', 'Rut sociedad Concesionaria', 'Nombre sociedad concesionaria', 'Link a CMF de SC', 'Fecha inicio del contrato de concesión', 'Fecha término de la concesión', 'Plazo fijo / variable ', 'Fecha inicio de obras', 'Fecha puesta servicio provisorio', 'Fecha puesta servicio definitivo', 'Inversión Materializada estimada', '% Avance obras físicas']
+
+REGIONS:
+['Valparaíso', 'Biobío', 'Tarapacá', 'Los Lagos', 'Ñuble; Biobío', 'Valparaíso; Metropolitana de Santiago', 'Metropolitana de Santiago', 'Maule; Ñuble', 'Coquimbo; Valparaíso; Metropolitana de Santiago', 'Ñuble; Biobío; La Araucanía', 'La Araucanía; Los Ríos', 'Coquimbo', 'Antofagasta', 'Los Ríos; Los Lagos', 'La Araucanía', "Metropolitana de Santiago; Libertador General Bernardo O'Higgins; Maule", 'Magallanes y de la Antártica Chilena', "Tarapacá; Coquimbo; Libertador General Bernardo O'Higgins", 'Atacama', 'Antofagasta; Biobío', 'Metropolitana de Santiago; Los Ríos', 'Arica y Parinacota', "Libertador General Bernardo O'Higgins", "Valparaíso; Metropolitana de Santiago; Libertador General Bernardo O'Higgins", 'Atacama; Coquimbo', 'Ñuble', 'Biobío; La Araucanía', 'Aysén del General Carlos Ibáñez del Campo; Magallanes y de la Antártica Chilena', 'Maule', 'Metropolitana', 'Biobío; Ñuble, Araucanía ', 'Antofagasta;  Atacama', 'Araucanía', 'Araucanía, Los Ríos']
+
+SECTORS:
+['Vial interurbana', 'Aeroportuaria', 'Vial urbana', 'Soluciones hídricas', 'Penitenciaria', 'Edificación pública y equipamiento urbano', 'Hospitalaria']
+
+MONEDA:
+{'UF': 123}
+
+ESTADO:
+{'Operación': 46, 'Finalizado': 42, 'Construcción': 18, 'Construcción y Operación': 17}
+
+PLAZO:
+{'Variable': 64, 'Fijo': 59}
+

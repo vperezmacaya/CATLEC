@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- 1. IMPORTAMOS EL ARCHIVO DE AEROPUERTOS -->
+    <script src="Mapas vectoriales/Aeropuertos/Aeropuertos_de_Chile_DGC.js"></script>
+
+    <!-- 2. IMPORTAMOS EL ARCHIVO DE AUTOPISTAS -->
+    <script src="Mapas vectoriales/Contratos_Concesionados_shp/Concesiones_MOP_Lineal_2026_06_30(AUTOPISTAS).js"></script>
+
+    <style>
+        #map {position: absolute; top: 0; left: 0; right: 0; bottom: 0;}
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        // Inicializar el mapa centrado en el país
+        var map = L.map('map').setView([-35.6751, -71.5430], 4);
+        
+        L.tileLayer('https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key=zKlL4fW034uTxHY9KtZE', {
+            attribution:'<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
+            tileSize: 512,
+            zoomOffset: -1,
+            detectRetina: true
+        }).addTo(map);
+
+        // 3. CARGAR CAPA AEROCHILE
+        L.geoJSON(Aerochile, {
+            style: function(feature) {
+                return {
+                    color: '#000000',       // Contorno negro
+                    weight: 0.6,
+                    opacity: 0.8,
+                    fill: false
+                };
+            }
+        }).addTo(map);
+
+        // --- LÓGICA DE ASIGNACIÓN DE COLORES POR CÓDIGO ---
+        // Objeto interno para guardar un color único por cada COD detectado
+        var coloresPorCodigo = {};
+
+        // Función auxiliar para generar un color hexadecimal aleatorio y estético (tonos vivos)
+        function generarColorAleatorio() {
+            var letras = '0123456789ABCDEF';
+            var color = '#';
+            for (var i = 0; i < 6; i++) {
+                // Limitamos ligeramente el rango inicial para evitar que salgan colores excesivamente oscuros o negros
+                color += letras[Math.floor(Math.random() * 14)]; 
+            }
+            return color;
+        }
+
+        // 4. CARGAR CAPA DE AUTOPISTAS AGRUPADAS POR COLOR DE COD
+        L.geoJSON(autopistasChile, {
+            style: function(feature) {
+                // Verificar si el atributo COD existe y es válido
+                var tieneCodigo = feature.properties && feature.properties.COD && feature.properties.COD.toString().trim() !== "";
+
+                if (tieneCodigo) {
+                    var codigoActual = feature.properties.COD.toString().trim();
+
+                    // Si este COD no tiene un color asignado todavía en nuestro registro, se lo creamos al vuelo
+                    if (!coloresPorCodigo[codigoActual]) {
+                        coloresPorCodigo[codigoActual] = generarColorAleatorio();
+                    }
+
+                    // Extraemos el color que le corresponde a este grupo
+                    var colorAsignado = coloresPorCodigo[codigoActual];
+
+                    // DISEÑO GRUPAL: Mismo color para las shapes que comparten el mismo COD
+                    return {
+                        color: colorAsignado,    // Color único por grupo
+                        weight: 4.5,            // Línea gruesa para destacar las rutas concesionadas
+                        opacity: 0.95
+                    };
+                } else {
+                    // DISEÑO ATENUADO: Para los tramos viales sin código registrado
+                    return {
+                        color: '#64748b',       // Color gris apagado estándar
+                        weight: 1.5,            // Línea delgada
+                        opacity: 0.4
+                    };
+                }
+            },
+            // Agregamos también popups dinámicos para que puedas pinchar y verificar los grupos en vivo
+            onEachFeature: function(feature, layer) {
+                if (feature.properties && feature.properties.COD) {
+                    layer.bindPopup("<b>Grupo Concesión (COD):</b> " + feature.properties.COD);
+                }
+            }
+        }).addTo(map);
+
+        // 5. Herramienta de ayuda: Marcador interactivo para capturar coordenadas con clics
+        var marcadorAyuda = L.marker([0, 0]).addTo(map);
+
+        map.on('click', function(e) {
+            var lat = e.latlng.lat.toFixed(5);
+            var lng = e.latlng.lng.toFixed(5);
+            
+            marcadorAyuda.setLatLng(e.latlng)
+                .bindPopup("Coordenada: [" + lat + ", " + lng + "],")
+                .openPopup();
+                
+            console.log("[" + lat + ", " + lng + "],");
+        });
+    </script>
+</body>
+</html>
