@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -51,8 +51,7 @@
                                 Concesión</label>
                             <div class="search-wrapper">
                                 <i data-lucide="search" style="width: 14px; height: 14px;"></i>
-                                <input type="text" id="search-input" class="form-input"
-                                    placeholder="Nombre, sociedad..."
+                                <input type="text" id="search-input" class="form-input" placeholder="Nombre"
                                     style="padding: 0.4rem 0.6rem 0.4rem 2rem; font-size: 0.8rem;">
                             </div>
                         </div>
@@ -308,26 +307,32 @@
 
                         <!-- Responsive Search Table List -->
                         <div class="table-responsive">
-                            <table class="data-table" id="contracts-table">
-                                <thead>
-                                    <tr>
-                                        <th class="sortable" data-sort="Nombre de uso común">Nombre Concesión</th>
-                                        <th class="sortable" data-sort="Región geográfica">Región</th>
-                                        <th class="sortable asc" data-sort="Fecha inicio del contrato de concesión">
-                                            Inicio Contrato</th>
-                                        <th class="sortable" data-sort="ESTADO">Estado</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="table-body">
-                                    <!-- Dynamic rows inserted here -->
-                                </tbody>
-                            </table>
+                            <div class="table-header-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="sortable" data-sort="Nombre de uso común">Nombre Concesión</th>
+                                            <th class="sortable" data-sort="Región geográfica">Región</th>
+                                            <th class="sortable asc" data-sort="Fecha inicio del contrato de concesión">
+                                                Inicio Contrato</th>
+                                            <th class="sortable" data-sort="ESTADO">Estado</th>
+                                        </tr>
+                                    </thead>
+                                </table>
+                            </div>
+                            <div class="table-body-wrapper">
+                                <table class="data-table" id="contracts-table">
+                                    <tbody id="table-body">
+                                        <!-- Dynamic rows inserted here -->
+                                    </tbody>
+                                </table>
 
-                            <!-- Empty state representation (hidden by default) -->
-                            <div class="empty-state" id="empty-state" style="display: none; padding: 1.5rem 1rem;">
-                                <i data-lucide="folder-search" style="width: 28px; height: 28px;"></i>
-                                <h3 style="font-size: 0.9rem;">No se encontraron proyectos</h3>
-                                <p style="font-size: 0.75rem;">Prueba ajustando los filtros.</p>
+                                <!-- Empty state representation (hidden by default) -->
+                                <div class="empty-state" id="empty-state" style="display: none; padding: 1.5rem 1rem;">
+                                    <i data-lucide="folder-search" style="width: 28px; height: 28px;"></i>
+                                    <h3 style="font-size: 0.9rem;">No se encontraron proyectos</h3>
+                                    <p style="font-size: 0.75rem;">Prueba ajustando los filtros.</p>
+                                </div>
                             </div>
                         </div>
 
@@ -386,7 +391,7 @@
                             <span class="timeline-header-divider"></span>
                             <i data-lucide="gantt-chart" style="width:14px;height:14px;color:var(--primary);"></i>
                             <h2 class="timeline-header-title">Línea de Tiempo de Concesiones</h2>
-                            <span id="timeline-count-badge" class="timeline-count-badge">0 proyectos</span>
+                            <span id="timeline-count-badge" class="timeline-count-badge">0 Proyectos</span>
                         </div>
                         <div class="timeline-header-right">
                             <span class="timeline-legend-item">
@@ -408,7 +413,8 @@
 
                     <!-- Timeline Year Axis (sticky) -->
                     <div class="timeline-axis-wrapper">
-                        <div class="timeline-label-col" style="display: flex; align-items: center; padding-left: 12px; font-family: var(--font-heading); font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">
+                        <div class="timeline-label-col"
+                            style="display: flex; align-items: center; padding-left: 12px; font-family: var(--font-heading); font-weight: 600; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);">
                             Infraestructura
                         </div>
                         <div class="timeline-axis-scroll" id="timeline-axis-scroll">
@@ -429,13 +435,13 @@
             </div>
         </main>
     </div>
-    </div>
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <!-- Client Application Logic -->
     <script>
+
         // State variables
         let appState = {
             search: '',
@@ -1001,16 +1007,43 @@
             if (tableContainerView) tableContainerView.style.display = 'flex';
         }
 
-        function showProjectDetailView(code) {
+        async function showProjectDetailView(code) {
             if (!code) return;
             const cleanCode = code.toString().trim();
-            const item = allLoadedContractsMap[cleanCode];
 
             if (tableContainerView) tableContainerView.style.display = 'none';
             if (projectDetailView) projectDetailView.style.display = 'flex';
 
             updateDetailNavButtons(cleanCode);
 
+            let item = allLoadedContractsMap[cleanCode];
+
+            // If detail is not cached or bidders missing, fetch on-demand from API
+            if (!item || !item.bidders) {
+                if (detailViewBody) {
+                    detailViewBody.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1rem; color: var(--text-secondary); gap: 0.75rem; font-size: 0.8rem; text-align: center;">
+                            <i data-lucide="loader-2" class="spin" style="width: 22px; height: 22px; color: var(--primary); animation: spin 1s linear infinite;"></i>
+                            <span>Cargando detalle del proyecto...</span>
+                        </div>
+                    `;
+                    lucide.createIcons();
+                }
+                try {
+                    const response = await fetch(`/api/project/${encodeURIComponent(cleanCode)}`);
+                    if (response.ok) {
+                        item = await response.json();
+                        allLoadedContractsMap[cleanCode] = item;
+                    }
+                } catch (err) {
+                    console.error("Error al cargar detalle del proyecto:", err);
+                }
+            }
+
+            renderProjectDetailBody(cleanCode, item);
+        }
+
+        function renderProjectDetailBody(cleanCode, item) {
             const sector = item ? item['Sector del proyecto'] : (projectMetadata[cleanCode] ? projectMetadata[cleanCode].sector : '');
             const status = item ? item['ESTADO'] : (projectMetadata[cleanCode] ? projectMetadata[cleanCode].status : '');
             const secCfg = getSectorConfig(sector);
@@ -1023,7 +1056,7 @@
             const titleName = (item && item['Nombre de uso común']) || (item && item['Nombre de la Concesión ']) || (projectMetadata[cleanCode] && projectMetadata[cleanCode].name) || 'Concesión';
 
             const timelineBtnHTML = `
-                <div style="margin-top: 0.6rem; margin-bottom: 0.65rem;">
+                <div style="margin-top: 0.1rem; margin-bottom: 0.1rem;">
                     <button id="btn-view-in-timeline" class="btn-action-link" style="width: 100%; justify-content: center; padding: 0.45rem 0.75rem; font-size: 0.76rem; font-weight: 600; background: linear-gradient(135deg, rgba(37,99,235,0.1), rgba(37,99,235,0.04)); border: 1px solid rgba(37,99,235,0.3); color: var(--primary); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; gap: 0.4rem;">
                         <i data-lucide="gantt-chart" style="width: 15px; height: 15px;"></i>
                         Ver en línea de tiempo
@@ -1146,7 +1179,7 @@
 
                 relicitNavHTML = `
                     <div style="
-                        margin-top: 0.6rem;
+                        margin-top: 0.1rem;
                         padding: 0.55rem 0.7rem;
                         background: linear-gradient(135deg, ${secCfg.color}08, ${secCfg.color}12);
                         border: 1px solid ${secCfg.color}30;
@@ -1174,7 +1207,7 @@
 
             if (detailViewBody) {
                 detailViewBody.innerHTML = `
-                    <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.65rem;">
+                    <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.1rem;">
                         <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem;">
                             <h3 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary); line-height: 1.35; font-family: var(--font-heading); flex: 1; min-width: 0;">${titleName}</h3>
                             <span class="badge ${badgeClass}" style="flex-shrink: 0; font-size: 0.7rem; padding: 0.2rem 0.5rem; white-space: nowrap; margin-top: 2px;">${status || sector}</span>
@@ -2951,21 +2984,22 @@
             });
 
             // Sync vertical scroll from bars container to label column
-            const barsScrollEl = document.getElementById('timeline-bars-scroll');
-            const labelColEl = document.getElementById('timeline-label-col');
-            if (barsScrollEl && labelColEl) {
-                barsScrollEl.onscroll = () => {
-                    labelColEl.scrollTop = barsScrollEl.scrollTop;
-                };
-            }
+            //const barsScrollEl = document.getElementById('timeline-bars-scroll');
+            //const labelColEl = document.getElementById('timeline-label-col');
+            //if (barsScrollEl && labelColEl) {
+            //barsScrollEl.onscroll = () => {
+            //labelColEl.scrollTop = barsScrollEl.scrollTop;
+            //};
+            //}
 
             // Auto-scroll to highlighted row if specified
-            if (highlightedRowIdx !== -1 && rowYOffsets[highlightedRowIdx] !== undefined && barsScrollEl) {
+            const rowsWrapperEl = document.querySelector('.timeline-rows-wrapper');
+            if (highlightedRowIdx !== -1 && rowYOffsets[highlightedRowIdx] !== undefined && rowsWrapperEl) {
                 setTimeout(() => {
                     const rowY = rowYOffsets[highlightedRowIdx];
                     const rowH = rowMetrics[highlightedRowIdx].height;
-                    const targetScroll = Math.max(0, rowY - (barsScrollEl.clientHeight / 2) + (rowH / 2));
-                    barsScrollEl.scrollTo({ top: targetScroll, behavior: 'smooth' });
+                    const targetScroll = Math.max(0, rowY - (rowsWrapperEl.clientHeight / 2) + (rowH / 2));
+                    rowsWrapperEl.scrollTo({ top: targetScroll, behavior: 'smooth' });
                 }, 60);
             }
         }
@@ -3052,14 +3086,14 @@
             // The label col has overflow-y:hidden so the browser won't scroll it
             // natively — we intercept wheel events and delegate to barsScrollEl,
             // which in turn syncs the label position via its onscroll handler.
-            const labelCol = document.getElementById('timeline-label-col');
-            if (labelCol) {
-                labelCol.addEventListener('wheel', (e) => {
-                    e.preventDefault();
-                    const barsScroll = document.getElementById('timeline-bars-scroll');
-                    if (barsScroll) barsScroll.scrollTop += e.deltaY;
-                }, { passive: false });
-            }
+            //const labelCol = document.getElementById('timeline-label-col');
+            //if (labelCol) {
+            //labelCol.addEventListener('wheel', (e) => {
+            //e.preventDefault();
+            //const barsScroll = document.getElementById('timeline-bars-scroll');
+            //if (barsScroll) barsScroll.scrollTop += e.deltaY;
+            //}, { passive: false });
+            //}
         }
     </script>
     <div id="timeline-tooltip" class="timeline-tooltip" style="display:none;"></div>

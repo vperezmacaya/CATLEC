@@ -68,6 +68,28 @@ try:
 except Exception as e:
     print(f"Error cargando hoja 'OF' de oferentes: {e}")
 
+# Pre-calculate unified Search Index column at startup for instant vectorized searching
+def _build_row_search_index(row):
+    proj_code = str(row.get('Código proyecto') or '')
+    bidders = BIDDERS_BY_PROJECT.get(proj_code.strip(), [])
+    bidders_text = ' '.join([f"{b.get('name', '')} {b.get('code', '')}" for b in bidders])
+    
+    fields = [
+        proj_code,
+        str(row.get('Nombre de la Concesión ') or ''),
+        str(row.get('Nombre de uso común') or ''),
+        str(row.get('Descripción ') or ''),
+        str(row.get('Nombre sociedad concesionaria') or ''),
+        str(row.get('Región geográfica') or ''),
+        str(row.get('Sector del proyecto') or ''),
+        bidders_text
+    ]
+    combined = ' '.join(fields)
+    norm = unicodedata.normalize('NFD', combined)
+    return ''.join(c for c in norm if unicodedata.category(c) != 'Mn').lower()
+
+df_contracts['_search_index'] = df_contracts.apply(_build_row_search_index, axis=1)
+
 
 # Helper: Standardize region splitting and naming convention (Chile 16 Regions)
 def parse_regions_from_row(region_str):
@@ -234,24 +256,13 @@ def get_data():
         if selected_sectors:
             filtered_df = filtered_df[filtered_df['Sector del proyecto'].isin(selected_sectors)]
 
-    # 3. Apply Full Text Search
-    search_query = request.args.get('search', '').strip().lower()
+    # 3. Apply Vectorized Full Text Search (Fast C-level filtering)
+    search_query = request.args.get('search', '').strip()
     if search_query:
-        def matches_search(row):
-            proj_code = str(row['Código proyecto'] or '')
-            bidders = BIDDERS_BY_PROJECT.get(proj_code, [])
-            bidders_text = ' '.join([f"{b['name']} {b['code']}" for b in bidders])
-            search_fields = [
-                proj_code,
-                str(row['Nombre de la Concesión '] or ''),
-                str(row['Nombre de uso común'] or ''),
-                str(row['Descripción '] or ''),
-                str(row['Nombre sociedad concesionaria'] or ''),
-                bidders_text
-            ]
-            return any(search_query in field.lower() for field in search_fields)
+        norm_q = unicodedata.normalize('NFD', search_query)
+        clean_q = ''.join(c for c in norm_q if unicodedata.category(c) != 'Mn').lower()
         
-        mask = filtered_df.apply(matches_search, axis=1)
+        mask = filtered_df['_search_index'].str.contains(clean_q, regex=False, na=False)
         filtered_df = filtered_df[mask]
 
     # 4. Save Filtered Stats before paging
@@ -318,12 +329,11 @@ def get_data():
         sanitized['bidders'] = BIDDERS_BY_PROJECT.get(code, [])
         serialized_data.append(sanitized)
 
-    # 7.1 Extract map projects (filtered active matching concessions)
+    # 7.1 Extract map projects (lightweight payload for fast map & filter rendering)
     map_projects = []
     for _, row in filtered_df.iterrows():
         row_dict = row.to_dict()
-        sanitized = {k: sanitize_value(v) for k, v in row_dict.items()}
-        p_code = sanitized['Código proyecto']
+        p_code = str(row['Código proyecto'])
 
         m = re.search(r'^\d+_(.+)(\d)$', p_code)
         if m:
@@ -334,15 +344,12 @@ def get_data():
 
         map_projects.append({
             'code': p_code,
-            'name': sanitized.get('Nombre de uso común') or sanitized.get('Nombre de la Concesión '),
-            'common': sanitized.get('Nombre de uso común'),
-            'region': sanitized['Región geográfica'],
-            'status': sanitized['ESTADO'],
-            'investment': sanitized['Inversión Materializada estimada'],
-            'sector': sanitized['Sector del proyecto'],
+            'name': sanitize_value(row.get('Nombre de uso común')) or sanitize_value(row.get('Nombre de la Concesión ')),
+            'common': sanitize_value(row.get('Nombre de uso común')),
+            'region': sanitize_value(row.get('Región geográfica')),
+            'status': sanitize_value(row.get('ESTADO')),
+            'sector': sanitize_value(row.get('Sector del proyecto')),
             'shapes': parse_shapes_list(get_row_shapes_val(row_dict)),
-            'tender_date': get_row_tender_date(row_dict),
-            'bidders': BIDDERS_BY_PROJECT.get(p_code, []),
             'group_timeline': BASE_GROUPS.get(base_code, [])
         })
 
@@ -370,6 +377,30 @@ def get_data():
         },
         'map_projects': map_projects
     })
+
+@app.route('/api/project/<path:code_id>')
+def get_project_detail(code_id):
+    """Retrieve full detail payload on-demand for a single project code"""
+    clean_code = str(code_id).strip()
+    matching = df_contracts[df_contracts['Código proyecto'].astype(str).str.strip() == clean_code]
+    if matching.empty:
+        return jsonify({'error': 'Proyecto no encontrado'}), 404
+        
+    row_dict = matching.iloc[0].to_dict()
+    sanitized = {k: sanitize_value(v) for k, v in row_dict.items()}
+    
+    m = re.search(r'^\d+_(.+)(\d)$', clean_code)
+    if m:
+        base_code = m.group(1)
+    else:
+        m_simple = re.search(r'^(.+)(\d)$', clean_code)
+        base_code = m_simple.group(1) if m_simple else clean_code
+        
+    sanitized['group_timeline'] = BASE_GROUPS.get(base_code, [])
+    sanitized['shapes'] = parse_shapes_list(get_row_shapes_val(row_dict))
+    sanitized['bidders'] = BIDDERS_BY_PROJECT.get(clean_code, [])
+    
+    return jsonify(sanitized)
 
 # API Routes for Map GeoJSON Layering
 MAPS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Mapas vectoriales', 'JSONS')
